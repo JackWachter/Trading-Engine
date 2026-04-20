@@ -1,1 +1,21 @@
-/target
+target/
+
+# Rust backup files
+**/*.rs.bk
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# IDE/editor settings
+.vscode/
+.idea/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
