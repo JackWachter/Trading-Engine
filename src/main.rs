@@ -1,101 +1,60 @@
-use std::collections::HashMap;
+use trading_engine::engine::spawn_engine;
+use trading_engine::gateway::serve_tcp;
+use trading_engine::types::{NewOrder, ReplaceOrder, Side};
 
-#[derive(Debug)]
-enum BidOrAsk {
-    Bid,
-    Ask,
-}
+const BTC_USD: u64 = 1;
+const MAKER: u64 = 10;
+const TAKER: u64 = 20;
 
-#[derive(Debug)]
-struct Orderbook {
-    asks: HashMap<Price, Limit>,
-    bids: HashMap<Price, Limit>,
-}
+#[tokio::main(flavor = "multi_thread")]
+async fn main() {
+    let engine = spawn_engine(1024, 1024);
 
-impl Orderbook {
-    fn new() -> Orderbook {
-        Orderbook {
-            asks: HashMap::new(),
-            bids: HashMap::new(),
-        }
+    for event in engine.credit_position(MAKER, BTC_USD, 20).await {
+        println!("{event:?}");
+    }
+    for event in engine.credit_cash(TAKER, 100_000).await {
+        println!("{event:?}");
     }
 
-    fn add_order(&mut self, price: f64, order: Order) {
-        match order.bid_or_ask {
-            BidOrAsk::Bid => {
-                let price = Price::new(price);
-                let limit = self.bids.get_mut(&price);
-
-                match (self.bids.get_mut(&price)) {
-                    Some(limit) => limit.add_order(order),
-                    None => {
-                        let mut limit = Limit::new(price);
-                        limit.add_order(order);
-                        self.bids.insert(price, limit);
-                    }
-                }
-            }
-            BidOrAsk::Ask => {}
-        }
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
-struct Price {
-    integral: u64,
-    fractional: u64,
-    scalar: u64,
-}
-
-impl Price {
-    fn new(price: f64) -> Price {
-        let scalar = 100000;
-        let integral = price as u64;
-        let fractional = ((price % 1.0) * scalar as f64) as u64;
-        Price {
-            scalar,
-            integral,
-            fractional,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct Limit {
-    price: Price,
-    orders: Vec<Order>,
-}
-
-impl Limit {
-    fn new(price: Price) -> Limit {
-        Limit {
-            price,
-            orders: Vec::new(),
-        }
+    for event in engine
+        .submit(NewOrder::limit(1, BTC_USD, Side::Ask, 101, 12).with_account(MAKER))
+        .await
+    {
+        println!("{event:?}");
     }
 
-    fn add_order(&mut self, order: Order) {
-        self.orders.push(order);
+    for event in engine
+        .submit(NewOrder::limit(2, BTC_USD, Side::Ask, 102, 8).with_account(MAKER))
+        .await
+    {
+        println!("{event:?}");
     }
-}
 
-#[derive(Debug)]
-struct Order {
-    size: f64,
-    bid_or_ask: BidOrAsk,
-}
-
-impl Order {
-    fn new(bid_or_ask: BidOrAsk, size: f64) -> Order {
-        Order { bid_or_ask, size }
+    for event in engine
+        .replace(ReplaceOrder {
+            order_id: 2,
+            new_price: 100,
+            new_quantity: 6,
+        })
+        .await
+    {
+        println!("{event:?}");
     }
-}
 
-fn main () {
-    let buy_order_from_alice = Order::new(BidOrAsk::Bid, 5.5);
-    let buy_order_from_bob = Order::new(BidOrAsk::Bid, 2.45);
-    let mut orderbook = Orderbook::new();
-    orderbook.add_order(4.4, buy_order_from_alice);
-    orderbook.add_order(4.4, buy_order_from_bob);
-    println!("{:?}", orderbook);
+    for event in engine
+        .submit(NewOrder::limit(3, BTC_USD, Side::Bid, 102, 15).with_account(TAKER))
+        .await
+    {
+        println!("{event:?}");
+    }
+
+    println!("snapshot: {:?}", engine.snapshot(BTC_USD).await);
+
+    let gateway_engine = engine.clone();
+    tokio::spawn(async move {
+        let _ = serve_tcp("127.0.0.1:7001", gateway_engine).await;
+    });
+
+    let _ = tokio::signal::ctrl_c().await;
 }
