@@ -312,14 +312,12 @@ The benchmark should be interpreted as a lower-level matching-core measurement, 
 
 ### Benchmark environment
 
-Fill this in for reproducibility before publishing benchmark claims externally:
-
 ```text
-CPU:
-OS:
-Rust version:
+CPU: Intel Ultra 9
+OS: Windows 11
+Rust version: Rust 1.83
 Build command: cargo bench
-Criterion version:
+Criterion version: 0.3.6
 Benchmark mode: synchronous in-memory microbenchmark
 Persistence enabled: no
 Network I/O included: no
